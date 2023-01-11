@@ -5,31 +5,33 @@ import {
   Stack,
   Button,
   useDisclosure,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
-  Text,
   IconButton,
   InputGroup,
   InputLeftElement,
   Input,
   Spinner,
-  Center
+  Center,
 } from "@chakra-ui/react";
-import { useState } from "react";
+import axios, { CancelTokenSource } from "axios";
+import { useEffect, useRef, useState } from "react";
 import {
   RiAlertLine,
   RiArrowUpLine,
   RiFileList3Line,
   RiFireFill,
-  RiHeartFill,
   RiHeartLine,
   RiInboxLine,
-  RiSearchLine
+  RiSearchLine,
 } from "react-icons/ri";
+import {
+  API_RESULT_ERROR,
+  getMoviePopularList,
+  getMovieSearchList,
+  MovieItemModel,
+  MovieDataModel,
+} from "./api";
+import Movie from "./Movie";
+import WishlistModel from "./WishListModel";
 
 /*
 ## 需求：
@@ -105,43 +107,108 @@ import {
   - Refactor components
 */
 
-const Movie = () => {
-  const [isAddedToWishlist, setIsAddedToWishlist] = useState(false);
+const cts: CancelTokenSource | null = axios.CancelToken.source();
 
-  return (
-    <Flex
-      w="full"
-      px="24px"
-      py="16px"
-      bgColor="white"
-      borderRadius="md"
-      justify="space-between"
-      align="center"
-      boxShadow="sm"
-    >
-      <Box>
-        <Text fontWeight="semibold" isTruncated>
-          Movie Title
-        </Text>
-        <Text color="gray.400" fontSize="xs" isTruncated>
-          2022
-        </Text>
-      </Box>
-      <IconButton
-        variant="ghost"
-        colorScheme="pink"
-        icon={isAddedToWishlist ? <RiHeartFill /> : <RiHeartLine />}
-        aria-label="edit"
-        _focus={{ outline: "none" }}
-        isRound
-        onClick={() => setIsAddedToWishlist(!isAddedToWishlist)}
-      />
-    </Flex>
-  );
-};
+interface AppState {
+  loadPage: number;
+  isSearch: boolean;
+  searchKey: string;
+  totalResult: number;
+  movieList: MovieItemModel[] | null;
+}
 
 const App = () => {
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [isLoading, setIsLoading] = useState(true);
+  const [appState, setAppState] = useState<AppState>({
+    loadPage: 1,
+    isSearch: false,
+    searchKey: "",
+    totalResult: 0,
+    movieList: [],
+  });
+  const moiveListref = useRef<HTMLDivElement>(null);
+  const movieList = appState.movieList;
+
+  const updateData = (
+    isLoadMore: boolean,
+    data: MovieDataModel | string,
+    page: number,
+    isSearch = false,
+    searchKey = ""
+  ) => {
+    //fail
+    if (data == API_RESULT_ERROR) {
+      setAppState({
+        ...appState,
+        movieList: null,
+      });
+    }
+    //success
+    else {
+      if (isLoadMore) {
+        const dataList =
+          (data as MovieDataModel).results ?? ([] as MovieItemModel[]);
+        const currList = appState.movieList ?? ([] as MovieItemModel[]);
+        const moreList = [...currList, ...dataList];
+        setAppState({
+          ...appState,
+          loadPage: page,
+          movieList: moreList,
+        });
+      } else {
+        setAppState({
+          ...appState,
+          isSearch: isSearch,
+          searchKey: searchKey,
+          loadPage: page,
+          totalResult: (data as MovieDataModel).total_results ?? 0,
+          movieList:
+            (data as MovieDataModel).results ?? ([] as MovieItemModel[]),
+        });
+      }
+    }
+  };
+
+  const getPopularData = (page: number, isLoadMore?: boolean) => {
+    setIsLoading(true);
+    getMoviePopularList(cts.token, { page }).then((data) => {
+      updateData(isLoadMore ?? false, data, page);
+      setIsLoading(false);
+    });
+  };
+
+  const getSearchData = (
+    page: number,
+    searchKey: string,
+    isLoadMore?: boolean
+  ) => {
+    setIsLoading(true);
+    getMovieSearchList(cts.token, {
+      query: searchKey,
+      page: page,
+    }).then((data) => {
+      updateData(isLoadMore ?? false, data, page, true, searchKey);
+      setIsLoading(false);
+    });
+  };
+
+  const loadMore = () => {
+    const loadMorePage = appState.loadPage + 1;
+    if (appState.isSearch) {
+      getSearchData(loadMorePage, appState.searchKey, true);
+    } else {
+      getPopularData(loadMorePage, true);
+    }
+  };
+
+  const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
+    getSearchData(1, event.target.value, false);
+  };
+
+  useEffect(() => {
+    getPopularData(1);
+  }, []);
 
   return (
     <Box bgColor="#f3f3f3" h="100vh">
@@ -163,143 +230,109 @@ const App = () => {
             color="gray.500"
             children={<RiSearchLine />}
           />
-          <Input type="tel" placeholder="Search Movies" bg="white" />
+          <Input
+            type="tel"
+            placeholder="Search Movies"
+            bg="white"
+            onChange={(event) => handleSearch(event)}
+          />
         </InputGroup>
 
         {/* ----- Loading UI ----- */}
-        {/* <Center py="32px">
-          <Spinner color="pink.600" />
-        </Center> */}
+        {isLoading && (
+          <Center py="32px">
+            <Spinner color="pink.600" />
+          </Center>
+        )}
 
         {/* ----- Error UI ----- */}
-        {/* <Center py="32px" color="pink.600" flexDirection="column">
-          <Box fontSize="x-large" mb="8px">
-            <RiAlertLine />
-          </Box>
-          <Box>Something went wrong.</Box>
-          <Box>Please try again.</Box>
-        </Center> */}
+        {movieList == null && (
+          <Center py="32px" color="pink.600" flexDirection="column">
+            <Box fontSize="x-large" mb="8px">
+              <RiAlertLine />
+            </Box>
+            <Box>Something went wrong.</Box>
+            <Box>Please try again.</Box>
+          </Center>
+        )}
 
         {/* ----- Empty  UI ----- */}
-        {/* <Center py="32px" color="pink.600" flexDirection="column">
-          <Box fontSize="x-large" mb="8px">
-            <RiInboxLine />
-          </Box>
-          No data.
-        </Center> */}
+        {movieList?.length == 0 && (
+          <Center py="32px" color="pink.600" flexDirection="column">
+            <Box fontSize="x-large" mb="8px">
+              <RiInboxLine />
+            </Box>
+            {appState.isSearch ? " No matched result." : "No data."}
+          </Center>
+        )}
 
-        {/* ----- Movie List (Popular movies) ------ */}
-        <Flex
-          fontWeight="600"
-          color="pink.600"
-          mb="8px"
-          align="center"
-          gap="4px"
-        >
-          <RiFireFill />
-          Popular movies
-        </Flex>
-        <Stack
-          w="full"
-          minH="0"
-          pb="32px"
-          flex={1}
-          overflowY="auto"
-          spacing="8px"
-        >
-          <Movie />
+        {/* ----- Movie List (Popular/Search movies) ------ */}
+        {(movieList?.length ?? 0) > 0 && (
+          <Flex
+            fontWeight="600"
+            color="pink.600"
+            mb="8px"
+            align="center"
+            gap="4px"
+          >
+            {appState.isSearch ? <RiFileList3Line /> : <RiFireFill />}
+            {appState.isSearch ? "Search result" : "Popular movies"}
+          </Flex>
+        )}
+        {(movieList?.length ?? 0) > 0 && (
+          <Stack
+            w="full"
+            minH="0"
+            pb="32px"
+            flex={1}
+            overflowY="auto"
+            spacing="8px"
+            ref={moiveListref}
+          >
+            {movieList?.map((item,index) => (
+              <Movie
+                key={item.id}
+                item={item}
+              />
+            ))}
 
-          {/* ----- Load More Button UI (Bonus) ------ */}
-          {/* <Center>
-            <Button
-              variant="ghost"
-              size="md"
-              colorScheme="blackAlpha"
-              onClick={onOpen}
-              isLoading={false} // set true while loading data
-              loadingText="Loading"
-            >
-              Load More
-            </Button>
-          </Center> */}
-        </Stack>
-
-        {/* ----- Search Result UI ------ */}
-        {/* <Flex
-          fontWeight="600"
-          color="pink.600"
-          mb="8px"
-          align="center"
-          gap="4px"
-        >
-          <RiFileList3Line />
-          Search result
-        </Flex>
-        <Stack
-          w="full"
-          minH="0"
-          pb="32px"
-          flex={1}
-          overflowY="auto"
-          spacing="8px"
-        >
-          <Movie />
-        </Stack> */}
-
-        {/* ----- Empty Result UI ----- */}
-        {/* <Center py="32px" color="pink.600" flexDirection="column">
-          <Box fontSize="x-large" mb="8px">
-            <RiInboxLine />
-          </Box>
-          No matched result.
-        </Center> */}
+            {/* ----- Load More Button UI (Bonus) ------ */}
+            {(movieList?.length ?? 0) < appState.totalResult && (
+              <Center>
+                <Button
+                  variant="ghost"
+                  size="md"
+                  colorScheme="blackAlpha"
+                  onClick={loadMore}
+                  isLoading={isLoading} // set true while loading data
+                  loadingText="Loading"
+                >
+                  Load More
+                </Button>
+              </Center>
+            )}
+          </Stack>
+        )}
       </Flex>
 
-      <Modal isOpen={isOpen} onClose={onClose}>
-        <ModalOverlay />
-        <ModalContent bgColor="#f3f3f3">
-          <ModalHeader>Wishlist</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody p="32px">
-            {/* ----- Empty UI ----- */}
-            {/* <Center py="32px" color="pink.600" flexDirection="column">
-              <Box fontSize="x-large" mb="8px">
-                <RiInboxLine />
-              </Box>
-              Find your favorite movies!
-              <Button
-                mt="16px"
-                size="md"
-                variant="outline"
-                colorScheme="blackAlpha"
-                onClick={onClose}
-              >
-                Close
-              </Button>
-            </Center> */}
-
-            {/* ----- Movie List ------ */}
-            <Stack>
-              <Movie />
-            </Stack>
-          </ModalBody>
-        </ModalContent>
-      </Modal>
+      <WishlistModel isOpen={isOpen} onClose={onClose} />
 
       {/* ----- GO to Top Button UI (Bonus)  ------ */}
-      {/* <IconButton
-        pos="absolute"
-        right="16px"
-        bottom="24px"
-        colorScheme="pink"
-        icon={<RiArrowUpLine />}
-        aria-label="edit"
-        _focus={{ outline: "none" }}
-        isRound
-        onClick={() => {
-          // TODO: Go to top
-        }}
-      /> */}
+      {moiveListref.current != null && (
+        <IconButton
+          pos="absolute"
+          right="16px"
+          bottom="24px"
+          colorScheme="pink"
+          icon={<RiArrowUpLine />}
+          aria-label="edit"
+          _focus={{ outline: "none" }}
+          isRound
+          onClick={() => {
+            moiveListref.current?.scrollTo(0, 0);
+          }}
+        />
+      )}
     </Box>
   );
 };

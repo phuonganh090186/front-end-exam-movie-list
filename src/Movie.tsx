@@ -7,16 +7,22 @@ import {
   getWishListStorage,
   removeFromWishListStorage,
 } from "./storage";
+import { useSelector } from "react-redux";
+import { RootState } from "./store";
 
 const Movie = ({ item, onChangeWish }: { item: MovieItemModel; onChangeWish?: (isWish: boolean) => void }) => {
   const [isAddedToWishlist, setIsAddedToWishlist] = useState(false);
+  const localStorageChangeTime = useSelector((state: RootState) => state.app.localStorageChangeTime);
 
   useEffect(() => {
     const wishlist = getWishListStorage();
     if (wishlist.filter((ele) => ele.id == item.id).length > 0) {
       setIsAddedToWishlist(true);
     }
-  }, []);
+    else {
+      setIsAddedToWishlist(false);
+    }
+  }, [localStorageChangeTime]);
 
   const onToogleWish = () => {
     const wishState = !isAddedToWishlist;

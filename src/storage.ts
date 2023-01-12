@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { MovieItemModel } from "./api";
+import store, { setLocalStorageChangeTime } from "./store";
 
 export const WISH_LIST_STORAGE = "WISH_LIST_STORAGE";
 
@@ -16,12 +17,14 @@ export const addToWishListStorage = (movie: MovieItemModel) => {
   const wishlist: MovieItemModel[] = getWishListStorage();
   wishlist.push(movie);
   localStorage.setItem(WISH_LIST_STORAGE, JSON.stringify(wishlist));
+  store.dispatch(setLocalStorageChangeTime(new Date().getTime()));
 };
 
 export const removeFromWishListStorage = (movie: MovieItemModel) => {
   const wishlist: MovieItemModel[] = getWishListStorage();
   const newList = wishlist.filter((item) => item.id != movie.id);
   localStorage.setItem(WISH_LIST_STORAGE, JSON.stringify(newList));
+  store.dispatch(setLocalStorageChangeTime(new Date().getTime()));
 };
 
 export const isInWishListStorage = (movie: MovieItemModel) => {

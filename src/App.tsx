@@ -129,6 +129,7 @@ const App = () => {
   });
   const moiveListref = useRef<HTMLDivElement>(null);
   const movieList = appState.movieList;
+  const isSearch = appState.isSearch;
 
   const updateData = (
     isLoadMore: boolean,
@@ -203,12 +204,21 @@ const App = () => {
   };
 
   const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-    getSearchData(1, event.target.value, false);
+    if (event.target.value == null || event.target.value == "") {
+      setAppState({
+        ...appState,
+        isSearch: false,
+      });
+    } else {
+      getSearchData(1, event.target.value, false);
+    }
   };
 
   useEffect(() => {
-    getPopularData(1);
-  }, []);
+    if (!isSearch) {
+      getPopularData(1);
+    }
+  }, [isSearch]);
 
   return (
     <Box bgColor="#f3f3f3" h="100vh">
@@ -289,11 +299,8 @@ const App = () => {
             spacing="8px"
             ref={moiveListref}
           >
-            {movieList?.map((item,index) => (
-              <Movie
-                key={item.id}
-                item={item}
-              />
+            {movieList?.map((item, index) => (
+              <Movie key={item.id} item={item} />
             ))}
 
             {/* ----- Load More Button UI (Bonus) ------ */}
